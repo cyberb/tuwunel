@@ -5130,6 +5130,15 @@ pub struct IdentityProvider {
 	/// default: false
 	#[serde(default)]
 	pub forward_action_prompt: bool,
+
+	/// Unix socket to reach this provider through instead of the network.
+	/// Requests keep the issuer host, are sent as plain HTTP, and carry
+	/// `X-Forwarded-Proto: https` and `X-Forwarded-Host` so the provider
+	/// still reports its public issuer.
+	///
+	/// example: "/var/snap/platform/current/authelia.socket"
+	#[serde(default)]
+	pub unix_socket: Option<PathBuf>,
 }
 
 impl IdentityProvider {
