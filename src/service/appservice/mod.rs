@@ -4,12 +4,13 @@ mod ping;
 mod registration_info;
 pub(crate) mod request;
 mod thirdparty;
+mod transport;
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, HashMap},
 	ffi::OsStr,
 	fs::{self, read_dir},
-	sync::Arc,
+	sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
@@ -24,6 +25,7 @@ pub use self::{namespace_regex::NamespaceRegex, registration_info::RegistrationI
 pub struct Service {
 	registration_info: RwLock<Registrations>,
 	loaded: SetOnce<()>,
+	unix_clients: Mutex<HashMap<String, reqwest::Client>>,
 	services: Arc<crate::services::OnceServices>,
 	db: Data,
 }
@@ -40,6 +42,7 @@ impl crate::Service for Service {
 		Ok(Arc::new(Self {
 			registration_info: RwLock::new(BTreeMap::new()),
 			loaded: SetOnce::new(),
+			unix_clients: Mutex::new(HashMap::new()),
 			services: args.services.clone(),
 			db: Data {
 				id_appserviceregistrations: args.db["id_appserviceregistrations"].clone(),
