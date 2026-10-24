@@ -1,3 +1,4 @@
+mod transport;
 pub mod providers;
 pub mod server;
 pub mod sessions;
@@ -364,12 +365,14 @@ pub async fn request<Body>(
 where
 	Body: Serialize,
 {
-	let mut request = self
-		.services
-		.client
-		.oauth
-		.request(method, url)
-		.header(ACCEPT, "application/json");
+	let mut request = transport::provider_request(
+		&self.services.client.oauth,
+		&self.services.config,
+		provider,
+		method,
+		url,
+	)?
+	.header(ACCEPT, "application/json");
 
 	if let Some(body) = body.map(serde_html_form::to_string).transpose()? {
 		request = request

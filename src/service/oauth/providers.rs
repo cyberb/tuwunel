@@ -243,12 +243,14 @@ async fn configure(&self, mut provider: Provider) -> Result<Provider> {
 #[tracing::instrument(level = "debug", ret(level = "trace"), skip(self))]
 pub async fn discover(&self, provider: &Provider) -> Result<JsonValue> {
 	let limit = self.services.config.max_response_size;
-	let response = self
-		.services
-		.client
-		.oauth
-		.get(discovery_url(provider)?)
-		.send()
+	let response = super::transport::provider_request(
+		&self.services.client.oauth,
+		&self.services.config,
+		Some(provider),
+		reqwest::Method::GET,
+		discovery_url(provider)?,
+	)?
+	.send()
 		.await?
 		.error_for_status()?;
 
