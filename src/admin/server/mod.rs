@@ -3,6 +3,7 @@ mod backup_database;
 mod checkpoint_database;
 mod clear_caches;
 mod delete_backups;
+mod import_dendrite;
 mod list_backups;
 mod list_features;
 mod memory_usage;
@@ -103,6 +104,17 @@ pub(super) enum ServerCommand {
 
 	/// - List database backups
 	ListBackups,
+
+	#[command(about = "Import a Dendrite export into this server.")]
+	ImportDendrite {
+		path: PathBuf,
+
+		#[arg(long)]
+		signing_key: PathBuf,
+
+		#[arg(long)]
+		media_path: PathBuf,
+	},
 
 	/// - Verify the files of a database backup are present with their expected
 	///   sizes
