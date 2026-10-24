@@ -105,17 +105,27 @@ pub async fn search_ldap(&self, user_id: &UserId) -> Result<Vec<(String, bool)>>
 				err!(Ldap("LDAP admin search failed"))
 			})?;
 
-		dns.extend(admin_entries.into_iter().filter_map(|entry| {
-			let search_entry = SearchEntry::construct(entry);
-			debug!(?search_entry, "LDAP search entry");
-			search_entry
-				.attrs
-				.get(&config.uid_attribute)
-				.is_some_and(|ids| {
-					ids.contains(&localpart) || ids.contains(&lowercased_localpart)
-				})
-				.then_some((search_entry.dn, true))
-		}));
+		let group_matched = !admin_entries.is_empty();
+		let admin_dns: Vec<(String, bool)> = admin_entries
+			.into_iter()
+			.filter_map(|entry| {
+				let search_entry = SearchEntry::construct(entry);
+				debug!(?search_entry, "LDAP search entry");
+				search_entry
+					.attrs
+					.get(&config.uid_attribute)
+					.is_some_and(|ids| {
+						ids.contains(&localpart) || ids.contains(&lowercased_localpart)
+					})
+					.then_some((search_entry.dn, true))
+			})
+			.collect();
+
+		if admin_dns.is_empty() && group_matched {
+			dns.values_mut().for_each(|is_admin| *is_admin = true);
+		} else {
+			dns.extend(admin_dns);
+		}
 	}
 
 	ldap.unbind().await.map_err(|e| {
