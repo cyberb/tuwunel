@@ -7,7 +7,7 @@ use ruma::{
 };
 use serde_json::{json, value::to_raw_value};
 use tuwunel_core::{
-	Err, Error, Result, err, is_equal_to, utils,
+	Err, Error, Result, err, utils,
 	utils::{
 		OptionExt,
 		future::{OptionFutureExt, TryExtExt},
@@ -73,7 +73,7 @@ where
 				.or_else(|| {
 					let use_sso = user_origin
 						.as_deref()
-						.is_some_and(is_equal_to!("sso"))
+						.is_some_and(|origin| matches!(origin, "sso" | "ldap"))
 						&& services.config.identity_provider.len() == 1;
 
 					use_sso
