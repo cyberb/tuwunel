@@ -8,7 +8,7 @@ mod thumbnail;
 mod video;
 use std::{
 	collections::{HashMap, HashSet},
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 	time::{Duration, Instant, SystemTime},
 };
@@ -27,7 +27,8 @@ use ruma::{
 use tokio::sync::Semaphore;
 use tokio::{fs, sync::Notify};
 use tuwunel_core::{
-	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, trace,
+	Err, Error, Result, config::StorageProvider, debug, debug_error, debug_info, debug_warn, err,
+	trace,
 	utils::{
 		self, BoolExt, MutexMap,
 		result::LogDebugErr,
@@ -304,6 +305,46 @@ impl Service {
 		self.create_media_file(&key, file)
 			.map_ok(|()| walk.animates())
 			.await
+	}
+
+	pub async fn create_linked(
+		&self,
+		mxc: &Mxc<'_>,
+		user: Option<&UserId>,
+		content_disposition: Option<&ContentDisposition>,
+		content_type: Option<&str>,
+		source: &Path,
+	) -> Result {
+		let file = fs::read(source).await?;
+		let walk = sequence(&file);
+		let key = self.db.create_file_metadata(
+			mxc,
+			user,
+			&Dim::default(),
+			content_disposition,
+			walk.stored_type(content_type),
+		)?;
+
+		let name = self.get_media_name_sha256(&key);
+		let store_media_on_providers = &self.services.config.store_media_on_providers;
+		for provider in self.storage_providers().filter(|provider| {
+			store_media_on_providers.is_empty() || store_media_on_providers.contains(&provider.name)
+		}) {
+			if let StorageProvider::local(local) = &provider.config {
+				let target = Path::new(&local.base_path).join(&name);
+				_ = fs::remove_file(&target).await;
+				if fs::hard_link(source, &target).await.is_ok() {
+					continue;
+				}
+			}
+
+			provider
+				.put_one(name.as_str(), file.clone())
+				.await
+				.map_err(|e| err!(Database(error!(?name, ?provider, "Failed to store media on provider: {e:?}"))))?;
+		}
+
+		Ok(())
 	}
 
 	/// Deletes a file in the database and from the media directory via an MXC

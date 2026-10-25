@@ -802,11 +802,11 @@ async fn import_media(
 			continue;
 		};
 
-		let Ok(bytes) = fs::read(&file) else {
+		if !file.is_file() {
 			warn!(media_id = %row.media_id, ?file, "Skipping missing media file");
 			summary.skipped += 1;
 			continue;
-		};
+		}
 
 		let Ok(server_name) = ServerName::parse(&row.media_origin) else {
 			summary.skipped += 1;
@@ -824,7 +824,7 @@ async fn import_media(
 
 		services
 			.media
-			.create(&mxc, user.as_deref(), Some(&content_disposition), content_type, &bytes)
+			.create_linked(&mxc, user.as_deref(), Some(&content_disposition), content_type, &file)
 			.await?;
 
 		summary.media += 1;
