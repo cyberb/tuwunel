@@ -159,7 +159,7 @@ fn decode_apple_userinfo_from_id_token(session: &Session) -> Result<UserInfo> {
 
 	Ok(UserInfo {
 		sub: sub.to_owned(),
-		groups: Vec::new(),
+		groups: None,
 		preferred_username: preferred_username.clone(),
 		username: preferred_username,
 		nickname: None,
@@ -801,6 +801,7 @@ async fn sync_group_admin(
 	let in_admin_group = userinfo
 		.groups
 		.iter()
+		.flatten()
 		.any(|group| provider.admin_groups.contains(group));
 
 	let is_admin = services.admin.user_is_admin(user_id).await;
