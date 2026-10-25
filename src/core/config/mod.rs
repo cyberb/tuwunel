@@ -5139,6 +5139,16 @@ pub struct IdentityProvider {
 	/// example: "/var/snap/platform/current/authelia.socket"
 	#[serde(default)]
 	pub unix_socket: Option<PathBuf>,
+
+	/// Groups from the provider's `groups` claim whose members are server
+	/// admins. Admin is granted or revoked on every sign-in through this
+	/// provider, like `ldap.admin_filter` does for LDAP logins. Request the
+	/// `groups` scope in `scope` for the claim to be present. Empty leaves
+	/// admin status untouched.
+	///
+	/// example: ["syncloud"]
+	#[serde(default)]
+	pub admin_groups: Vec<String>,
 }
 
 impl IdentityProvider {

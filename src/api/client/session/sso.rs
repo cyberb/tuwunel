@@ -159,6 +159,7 @@ fn decode_apple_userinfo_from_id_token(session: &Session) -> Result<UserInfo> {
 
 	Ok(UserInfo {
 		sub: sub.to_owned(),
+		groups: None,
 		preferred_username: preferred_username.clone(),
 		username: preferred_username,
 		nickname: None,
@@ -519,6 +520,8 @@ pub(crate) async fn sso_callback_route(
 
 	services.users.locked_check(&user_id).await?;
 
+	sync_group_admin(&services, &provider, &userinfo, &user_id).await?;
+
 	let cookie = Cookie::build((GRANT_SESSION_COOKIE, EMPTY))
 		.path(grant_session_cookie_path(provider.callback_url.as_ref()))
 		.removal()
@@ -783,6 +786,36 @@ async fn handle_uiaa(
 		format!("/_matrix/client/v3/auth/m.login.sso/fallback/web?session={uiaa_session_id}");
 
 	Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) })
+}
+
+async fn sync_group_admin(
+	services: &Services,
+	provider: &Provider,
+	userinfo: &UserInfo,
+	user_id: &UserId,
+) -> Result {
+	if provider.admin_groups.is_empty() {
+		return Ok(());
+	}
+
+	let in_admin_group = userinfo
+		.groups
+		.iter()
+		.flatten()
+		.any(|group| provider.admin_groups.contains(group));
+
+	let is_admin = services.admin.user_is_admin(user_id).await;
+
+	if in_admin_group && !is_admin {
+		Box::pin(services.admin.make_user_admin(user_id)).await?;
+	} else if !in_admin_group
+		&& is_admin
+		&& let Err(e) = services.admin.revoke_admin(user_id).await
+	{
+		warn!(%user_id, "Keeping admin outside the admin groups: {e}");
+	}
+
+	Ok(())
 }
 
 async fn ldap_user_exists(services: &Services, user_id: &UserId) -> bool {
