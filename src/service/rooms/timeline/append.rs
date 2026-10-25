@@ -348,12 +348,13 @@ async fn append_pdu_effects(
 						.add_relation(count, related_pducount);
 				}
 			},
-			| Relation::Thread(thread) => {
-				self.services
-					.threads
-					.add_to_thread(&thread.event_id, pdu_id, pdu)
-					.await?;
-			},
+			| Relation::Thread(thread) =>
+				if self.get_pdu_id(&thread.event_id).await.is_ok() {
+					self.services
+						.threads
+						.add_to_thread(&thread.event_id, pdu_id, pdu)
+						.await?;
+				},
 			| Relation::Replacement(replacement) => {
 				self.services
 					.pdu_metadata
