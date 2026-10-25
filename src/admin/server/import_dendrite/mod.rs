@@ -656,7 +656,7 @@ async fn import_room(
 		let statehash = services.state.append_to_state(&pdu).await?;
 		services
 			.timeline
-			.append_pdu(&pdu, value, once(pdu.event_id.borrow()), &state_lock)
+			.append_imported_pdu(&pdu, value, once(pdu.event_id.borrow()), &state_lock)
 			.await?;
 
 		services

@@ -118,9 +118,40 @@ where
 pub async fn append_pdu<'a, Leafs>(
 	&'a self,
 	pdu: &'a PduEvent,
+	pdu_json: CanonicalJsonObject,
+	leafs: Leafs,
+	state_lock: &'a RoomMutexGuard,
+) -> Result<RawPduId>
+where
+	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
+{
+	self.append_pdu_notifying(pdu, pdu_json, leafs, state_lock, true)
+		.await
+}
+
+#[implement(super::Service)]
+pub async fn append_imported_pdu<'a, Leafs>(
+	&'a self,
+	pdu: &'a PduEvent,
+	pdu_json: CanonicalJsonObject,
+	leafs: Leafs,
+	state_lock: &'a RoomMutexGuard,
+) -> Result<RawPduId>
+where
+	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
+{
+	self.append_pdu_notifying(pdu, pdu_json, leafs, state_lock, false)
+		.await
+}
+
+#[implement(super::Service)]
+async fn append_pdu_notifying<'a, Leafs>(
+	&'a self,
+	pdu: &'a PduEvent,
 	mut pdu_json: CanonicalJsonObject,
 	leafs: Leafs,
 	state_lock: &'a RoomMutexGuard,
+	notify: bool,
 ) -> Result<RawPduId>
 where
 	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
@@ -197,34 +228,38 @@ where
 
 	drop(insert_lock);
 
-	// Only local senders can own pushers.
-	if self.services.globals.user_is_local(pdu.sender()) {
+	if notify {
+		// Only local senders can own pushers.
+		if self.services.globals.user_is_local(pdu.sender()) {
+			self.services
+				.sending
+				.refresh_push_badge(pdu.sender())
+				.await
+				.log_err()
+				.ok();
+		}
+
 		self.services
-			.sending
-			.refresh_push_badge(pdu.sender())
+			.pusher
+			.append_pdu(pdu_id, pdu)
 			.await
 			.log_err()
 			.ok();
 	}
-
-	self.services
-		.pusher
-		.append_pdu(pdu_id, pdu)
-		.await
-		.log_err()
-		.ok();
 
 	self.append_pdu_effects(pdu_id, pdu, shortroomid, count, state_lock)
 		.await?;
 
 	drop(next_count);
 
-	self.services
-		.appservice
-		.append_pdu(pdu_id, pdu)
-		.await
-		.log_err()
-		.ok();
+	if notify {
+		self.services
+			.appservice
+			.append_pdu(pdu_id, pdu)
+			.await
+			.log_err()
+			.ok();
+	}
 
 	Ok(pdu_id)
 }
