@@ -125,7 +125,7 @@ pub async fn append_pdu<'a, Leafs>(
 where
 	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
 {
-	self.append_pdu_notifying(pdu, pdu_json, leafs, state_lock, true)
+	self.append_pdu_with(pdu, pdu_json, leafs, state_lock, true)
 		.await
 }
 
@@ -140,18 +140,18 @@ pub async fn append_imported_pdu<'a, Leafs>(
 where
 	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
 {
-	self.append_pdu_notifying(pdu, pdu_json, leafs, state_lock, false)
+	self.append_pdu_with(pdu, pdu_json, leafs, state_lock, false)
 		.await
 }
 
 #[implement(super::Service)]
-async fn append_pdu_notifying<'a, Leafs>(
+async fn append_pdu_with<'a, Leafs>(
 	&'a self,
 	pdu: &'a PduEvent,
 	mut pdu_json: CanonicalJsonObject,
 	leafs: Leafs,
 	state_lock: &'a RoomMutexGuard,
-	notify: bool,
+	live: bool,
 ) -> Result<RawPduId>
 where
 	Leafs: Iterator<Item = &'a EventId> + Send + 'a,
@@ -228,7 +228,7 @@ where
 
 	drop(insert_lock);
 
-	if notify {
+	if live {
 		// Only local senders can own pushers.
 		if self.services.globals.user_is_local(pdu.sender()) {
 			self.services
@@ -247,12 +247,12 @@ where
 			.ok();
 	}
 
-	self.append_pdu_effects(pdu_id, pdu, shortroomid, count, state_lock)
+	self.append_pdu_effects(pdu_id, pdu, shortroomid, count, state_lock, live)
 		.await?;
 
 	drop(next_count);
 
-	if notify {
+	if live {
 		self.services
 			.appservice
 			.append_pdu(pdu_id, pdu)
@@ -320,6 +320,7 @@ async fn append_pdu_effects(
 	shortroomid: ShortRoomId,
 	count: PduCount,
 	state_lock: &RoomMutexGuard,
+	live: bool,
 ) -> Result {
 	match *pdu.kind() {
 		| TimelineEventType::RoomRedaction => {
@@ -344,7 +345,7 @@ async fn append_pdu_effects(
 					.await?;
 			}
 		},
-		| TimelineEventType::RoomMember => self.append_member_effects(pdu, count).await?,
+		| TimelineEventType::RoomMember => self.append_member_effects(pdu, count, live).await?,
 		| TimelineEventType::RoomMessage =>
 			self.append_message_effects(&pdu_id, pdu, shortroomid)
 				.await?,
@@ -427,7 +428,7 @@ async fn append_pdu_effects(
 /// user who is invited or knocked and leaves immediately still leaves the
 /// earlier event on record for auth.
 #[implement(super::Service)]
-async fn append_member_effects(&self, pdu: &PduEvent, count: PduCount) -> Result {
+async fn append_member_effects(&self, pdu: &PduEvent, count: PduCount, live: bool) -> Result {
 	let Some(state_key) = pdu.state_key() else {
 		return Ok(());
 	};
@@ -456,7 +457,7 @@ async fn append_member_effects(&self, pdu: &PduEvent, count: PduCount) -> Result
 			sender: pdu.sender(),
 			last_state: stripped_state,
 			invite_via: None,
-			update_joined_count: true,
+			update_joined_count: live,
 			count,
 		})
 		.await?;
