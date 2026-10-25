@@ -16,6 +16,9 @@ pub struct UserInfo {
 	/// The login username we first consider when defined.
 	pub preferred_username: Option<String>,
 
+	#[serde(default)]
+	pub groups: Vec<String>,
+
 	/// The login username considered.
 	pub username: Option<String>,
 
