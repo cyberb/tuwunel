@@ -25,7 +25,7 @@ use ruma::{
 };
 #[cfg(feature = "media_thumbnail")]
 use tokio::sync::Semaphore;
-use tokio::{fs, sync::Notify};
+use tokio::{fs, io::AsyncReadExt, sync::Notify};
 use tuwunel_core::{
 	Err, Error, Result, config::StorageProvider, debug, debug_error, debug_info, debug_warn, err,
 	trace,
@@ -315,8 +315,19 @@ impl Service {
 		content_type: Option<&str>,
 		source: &Path,
 	) -> Result {
-		let file = fs::read(source).await?;
-		let walk = sequence(&file);
+		let mut head = Vec::with_capacity(16);
+		fs::File::open(source)
+			.await?
+			.take(16)
+			.read_to_end(&mut head)
+			.await?;
+
+		let file = match sequence(&head).animates() {
+			| true => Some(fs::read(source).await?),
+			| false => None,
+		};
+
+		let walk = sequence(file.as_deref().unwrap_or(&head));
 		let key = self.db.create_file_metadata(
 			mxc,
 			user,
@@ -338,8 +349,13 @@ impl Service {
 				}
 			}
 
+			let bytes = match &file {
+				| Some(file) => file.clone(),
+				| None => fs::read(source).await?,
+			};
+
 			provider
-				.put_one(name.as_str(), file.clone())
+				.put_one(name.as_str(), bytes)
 				.await
 				.map_err(|e| err!(Database(error!(?name, ?provider, "Failed to store media on provider: {e:?}"))))?;
 		}
