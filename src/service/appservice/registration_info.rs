@@ -1,7 +1,7 @@
 use ruma::{OwnedUserId, ServerName, UserId, api::appservice::Registration};
 use tuwunel_core::Result;
 
-use super::NamespaceRegex;
+use super::{Extensions, NamespaceRegex};
 
 /// Appservice registration combined with its compiled regular expressions.
 #[derive(Clone, Debug)]
@@ -11,10 +11,19 @@ pub struct RegistrationInfo {
 	pub rooms: NamespaceRegex,
 	pub sender: OwnedUserId,
 	pub registration: Registration,
+	pub extensions: Extensions,
 }
 
 impl RegistrationInfo {
 	pub fn new(registration: Registration, server_name: &ServerName) -> Result<Self> {
+		Self::with_extensions(registration, Extensions::default(), server_name)
+	}
+
+	pub fn with_extensions(
+		registration: Registration,
+		extensions: Extensions,
+		server_name: &ServerName,
+	) -> Result<Self> {
 		Ok(Self {
 			aliases: NamespaceRegex::new(false, registration.namespaces.aliases.iter())?,
 			users: NamespaceRegex::new(false, registration.namespaces.users.iter())?,
@@ -26,6 +35,7 @@ impl RegistrationInfo {
 			)?,
 
 			registration,
+			extensions,
 		})
 	}
 

@@ -57,6 +57,7 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 	let router = register_synapse_admin_misc_routes(router);
 	let router = register_oidc_routes(router);
 	let router = register_rendezvous_routes(router);
+	let router = register_rtc_appservice_routes(router);
 	let router = register_server_misc_routes(router);
 	let router = register_federation_routes(router, config.allow_federation);
 
@@ -510,6 +511,19 @@ fn register_rendezvous_routes(router: Router<State>) -> Router<State> {
 			post(client::create_rendezvous_route),
 		)
 		.route("/_matrix/client/unstable/org.matrix.msc4108/rendezvous/{id}", session_routes)
+}
+
+fn register_rtc_appservice_routes(router: Router<State>) -> Router<State> {
+	router
+		.route(
+			"/_matrix/client/unstable/io.element.msc4502/rooms/{room_id}/is_joined",
+			get(client::is_joined_route),
+		)
+		.route("/_matrix/client/v1/rtc/livekit/{*path}", any(client::client_proxy_route))
+		.route(
+			"/_matrix/client/unstable/io.element.msc4195/rtc/livekit/{*path}",
+			any(client::client_proxy_route),
+		)
 }
 
 fn register_server_misc_routes(router: Router<State>) -> Router<State> {

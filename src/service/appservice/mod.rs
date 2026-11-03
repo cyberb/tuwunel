@@ -1,6 +1,10 @@
 mod append;
+mod extensions;
+#[cfg(test)]
+mod extensions_tests;
 mod namespace_regex;
 mod ping;
+mod proxy;
 mod registration_info;
 pub(crate) mod request;
 mod thirdparty;
@@ -20,7 +24,9 @@ use tokio::sync::{RwLock, RwLockReadGuard, SetOnce};
 use tuwunel_core::{Err, Result, defer, err, utils::stream::IterStream};
 use tuwunel_database::Map;
 
-pub use self::{namespace_regex::NamespaceRegex, registration_info::RegistrationInfo};
+pub use self::{
+	extensions::Extensions, namespace_regex::NamespaceRegex, registration_info::RegistrationInfo,
+};
 
 pub struct Service {
 	registration_info: RwLock<Registrations>,
@@ -102,8 +108,10 @@ impl Service {
 
 				let bytes = fs::read(path)?;
 				let registration: Registration = serde_yaml::from_slice(&bytes)?;
+				let extensions: Extensions = serde_yaml::from_slice(&bytes)?;
 
-				self.load_appservice(registration).await?;
+				self.load_appservice_with(registration, extensions)
+					.await?;
 			}
 		}
 
@@ -115,10 +123,22 @@ impl Service {
 	}
 
 	pub async fn load_appservice(&self, registration: Registration) -> Result {
+		self.load_appservice_with(registration, Extensions::default())
+			.await
+	}
+
+	async fn load_appservice_with(
+		&self,
+		registration: Registration,
+		extensions: Extensions,
+	) -> Result {
 		//TODO: Check for collisions between exclusive appservice namespaces
 
-		let registration_info =
-			RegistrationInfo::new(registration, self.services.globals.server_name())?;
+		let registration_info = RegistrationInfo::with_extensions(
+			registration,
+			extensions,
+			self.services.globals.server_name(),
+		)?;
 
 		let id = &registration_info.registration.id;
 
